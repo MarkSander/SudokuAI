@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Timers;
+﻿using System.Diagnostics;
 
 namespace KillerSudokuSolver
 {
@@ -94,11 +91,36 @@ namespace KillerSudokuSolver
         private int[,] board;
         private List<Cage> cages;
         private const int SIZE = 9;
+        private Dictionary<(int, int), List<Cage>> cellCages;
+
+        // Klassieke sudoku constraints: row, col en grid  
+        private bool[,] rowUsed = new bool[9, 10];
+        private bool[,] colUsed = new bool[9, 10];
+        private bool[,] gridUsed = new bool[9, 10];
 
         public KillerSudokuSolver(int[,] board, List<Cage> cages)
         {
             this.board = board;
             this.cages = cages;
+            cellCages = CellsToCages();
+        }
+
+        // Maak dictionary van welke cage bij elke cel hoort
+        private Dictionary<(int, int), List<Cage>> CellsToCages()
+        {
+            var dict = new Dictionary<(int, int), List<Cage>> ();
+            foreach (var cage in cages)
+            {
+                foreach (var cell  in cage.Cells)
+                {
+                    if (!dict.ContainsKey (cell))
+                    {
+                        dict[cell] = new List<Cage> ();
+                    }
+                    dict[cell].Add (cage);
+                }
+            }
+            return dict;
         }
         
         public bool Solve()
@@ -111,18 +133,25 @@ namespace KillerSudokuSolver
                     {
                         for (int num = 1; num <= SIZE; num++)
                         {
-                            if (IsSafe(row, col, num))
+                            int box = GetGridIndex(row, col);
+                            // Check constraints van rows, cols, grids en cages
+                            if (!rowUsed[row, num] && !colUsed[col, num] && !gridUsed[box, num] && IsCageConstrained(row, col, num))
                             {
                                 board[row, col] = num;
+                                rowUsed[row, num] = true;
+                                colUsed[col, num] = true;
+                                gridUsed[box, num] = true;
 
-                                if (Solve())
-                                {
-                                    return true;
-                                }
+                                if (Solve()) return true; // Recursie 
 
-                                board[row, col] = 0; // backtrack
+                                // Backtracking als het faalt
+                                board[row, col] = 0;
+                                rowUsed[row, num] = false;
+                                colUsed[col, num] = false;
+                                gridUsed[box, num] = false;
                             }
                         }
+
                         return false;
                     }
                 }
@@ -130,44 +159,17 @@ namespace KillerSudokuSolver
             return true; // Solved
         }
 
-        private bool IsSafe(int row, int col, int num)
+        private int GetGridIndex(int row, int col)
         {
-            // Check row
-            for (int x = 0; x < SIZE; x++)
-            {
-                if (board[row, x] == num)
-                {
-                    return false;
-                }
-            }
+            return (row / 3) * 3 + (col / 3);
+        }
 
-            // Check column
-            for (int x = 0; x < SIZE; x++)
+        // Check of de value in de cage mag volgens de cage constraints
+        private bool IsCageConstrained(int row, int col, int num)
+        {
+            if (cellCages.TryGetValue((row, col), out var cagesForCell))
             {
-                if (board[x, col] == num)
-                {
-                    return false;
-                }
-            }
-
-            // Check 3x3 subgrid
-            int startRow = row - row % 3;
-            int startCol = col - col % 3;
-            for (int i = 0; i < 3; i++)
-            {
-                for (int j = 0; j < 3; j++)
-                {
-                    if (board[i + startRow, j + startCol] == num)
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            // Check cages
-            foreach (var cage in cages)
-            {
-                if (cage.Cells.Contains((row, col)))
+                foreach (var cage in cagesForCell)
                 {
                     int currentSum = 0;
                     int emptyCells = 0;
@@ -176,29 +178,26 @@ namespace KillerSudokuSolver
                     {
                         int r = cell.Item1;
                         int c = cell.Item2;
+
+                        // Getallen mogen niet dubbel voorkomen in de cage
                         if (board[r, c] == num && (r != row || c != col))
-                        {
                             return false;
-                        }
+
+                        // Lege cellen tellen en som optellen
                         if (board[r, c] == 0)
-                        {
                             emptyCells++;
-                        }
                         currentSum += board[r, c];
                     }
 
+                    // De som van getallen mag niet boven het target uitkomen
                     if (currentSum + num > cage.TargetSum)
-                    {
                         return false;
-                    }
 
+                    // Bij de laatste lege cel moet de som gelijk zijn aan het target
                     if (emptyCells == 1 && currentSum + num != cage.TargetSum)
-                    {
                         return false;
-                    }
                 }
             }
-
             return true;
         }
 
