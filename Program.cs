@@ -26,11 +26,13 @@ namespace KillerSudokuSolver
             // Killer sudoku hokken
             List<Cage> cages = new List<Cage>
             {
+                // killer 1
                 //new Cage(15, new List<(int, int)> { (0, 0), (0, 1), (1, 0), (1, 1) }),
                 //new Cage(10, new List<(int, int)> { (0, 2), (0, 3), (1, 2), (1, 3) }),
 
+                // killer 2
                 new Cage(9,  new List<(int, int)> { (0, 0), (1, 0) }),
-                new Cage(28, new List<(int, int)> { (0, 1), (0, 2), (1, 2), (2, 2), (3,1) }),
+                new Cage(28, new List<(int, int)> { (0, 1), (0, 2), (1, 2), (2, 2), (1,3) }),
                 new Cage(7,  new List<(int, int)> { (1, 1), (2, 1) }),
                 new Cage(11, new List<(int, int)> { (0, 3), (0, 4), (0, 5), (0,6) }),
                 new Cage(15, new List<(int, int)> { (0, 7), (1, 7) }),
@@ -174,6 +176,10 @@ namespace KillerSudokuSolver
                     {
                         int r = cell.Item1;
                         int c = cell.Item2;
+                        if (board[r, c] == num && (r != row || c != col))
+                        {
+                            return false;
+                        }
                         if (board[r, c] == 0)
                         {
                             emptyCells++;
