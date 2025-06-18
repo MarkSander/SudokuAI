@@ -1,16 +1,17 @@
-﻿using Sudoku;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Timers;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-namespace KillerSudokuSolver
+namespace Sudoku
 {
-    class Program
+    public class ForwardTracking
     {
-        static void Main(string[] args)
+        public void RunForwardTracking()
         {
-            
+
             int[,] board = new int[9, 9]
             {
                 {0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -61,22 +62,16 @@ namespace KillerSudokuSolver
 
                 // etc..
             };
-
-            Stopwatch atimer = Stopwatch.StartNew();
             KillerSudokuSolver solver = new KillerSudokuSolver(board, cages);
-            var solverRunner = new ForwardTracking();
-            solverRunner.RunForwardTracking();
-            /*            if (solver.Solve())
-                        {
-                            Console.WriteLine("Solved Killer Sudoku:");
-                            solver.PrintBoard();
-                        }
-                        else
-                        {
-                            Console.WriteLine("No solution exists.");
-                        }*/
-            atimer.Stop();
-            Console.WriteLine("Elapsed time: " + atimer.ElapsedMilliseconds + " ms");
+            if (solver.Solve())
+            {
+                Console.WriteLine("Solved Killer Sudoku:");
+                solver.PrintBoard();
+            }
+            else
+            {
+                Console.WriteLine("No solution exists.");
+            }
         }
     }
 
@@ -96,131 +91,110 @@ namespace KillerSudokuSolver
     {
         private int[,] board;
         private List<Cage> cages;
-        private const int SIZE = 9;
 
         public KillerSudokuSolver(int[,] board, List<Cage> cages)
         {
             this.board = board;
             this.cages = cages;
         }
-        
         public bool Solve()
         {
-            for (int row = 0; row < SIZE; row++)
-            {
-                for (int col = 0; col < SIZE; col++)
-                {
-                    if (board[row, col] == 0)
-                    {
-                        for (int num = 1; num <= SIZE; num++)
-                        {
-                            if (IsSafe(row, col, num))
-                            {
-                                board[row, col] = num;
-
-                                if (Solve())
-                                {
-                                    return true;
-                                }
-
-                                board[row, col] = 0; // backtrack
-                            }
-                        }
-                        return false;
-                    }
-                }
-            }
-            return true; // Solved
+            return SolveInternal();
         }
 
-        private bool IsSafe(int row, int col, int num)
+        private bool SolveInternal()
         {
-            // Check row
-            for (int x = 0; x < SIZE; x++)
+            (int row, int col)? cell = FindNextCell();
+            if (cell == null)
+                return true;
+
+            var (r, c) = cell.Value;
+            foreach (var val in Enumerable.Range(1, 9))
             {
-                if (board[row, x] == num)
+                if (IsValid(r, c, val))
                 {
-                    return false;
+                    board[r, c] = val;
+                    if (SolveInternal())
+                        return true;
+                    board[r, c] = 0;
                 }
             }
+            return false;
+        }
 
-            // Check column
-            for (int x = 0; x < SIZE; x++)
-            {
-                if (board[x, col] == num)
-                {
-                    return false;
-                }
-            }
+        private (int, int)? FindNextCell()
+        {
+            (int row, int col)? bestCell = null;
+            int minOptions = 10;
 
-            // Check 3x3 subgrid
-            int startRow = row - row % 3;
-            int startCol = col - col % 3;
-            for (int i = 0; i < 3; i++)
+            for (int r = 0; r < 9; r++)
             {
-                for (int j = 0; j < 3; j++)
+                for (int c = 0; c < 9; c++)
                 {
-                    if (board[i + startRow, j + startCol] == num)
+                    if (board[r, c] == 0)
                     {
-                        return false;
+                        int options = Enumerable.Range(1, 9).Count(v => IsValid(r, c, v));
+                        if (options < minOptions)
+                        {
+                            minOptions = options;
+                            bestCell = (r, c);
+                            if (options == 1) return bestCell;
+                        }
                     }
                 }
             }
+            return bestCell;
+        }
 
-            // Check cages
+        private bool IsValid(int row, int col, int val)
+        {
+            for (int i = 0; i < 9; i++)
+                if (board[row, i] == val || board[i, col] == val)
+                    return false;
+
+            int boxRow = row / 3 * 3;
+            int boxCol = col / 3 * 3;
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                    if (board[boxRow + i, boxCol + j] == val)
+                        return false;
+
             foreach (var cage in cages)
             {
                 if (cage.Cells.Contains((row, col)))
                 {
-                    int currentSum = 0;
-                    int emptyCells = 0;
-
-                    foreach (var cell in cage.Cells)
+                    int sum = val;
+                    HashSet<int> used = new HashSet<int> { val };
+                    foreach (var (r, c) in cage.Cells)
                     {
-                        int r = cell.Item1;
-                        int c = cell.Item2;
-                        if (board[r, c] == num && (r != row || c != col))
+                        if ((r, c) == (row, col)) continue;
+                        int v = board[r, c];
+                        if (v != 0)
                         {
-                            return false;
+                            if (used.Contains(v)) return false;
+                            used.Add(v);
+                            sum += v;
                         }
-                        if (board[r, c] == 0)
-                        {
-                            emptyCells++;
-                        }
-                        currentSum += board[r, c];
                     }
 
-                    if (currentSum + num > cage.TargetSum)
-                    {
+                    if (sum > cage.TargetSum) return false;
+                    if (used.Count == cage.Cells.Count && sum != cage.TargetSum)
                         return false;
-                    }
-
-                    if (emptyCells == 1 && currentSum + num != cage.TargetSum)
-                    {
-                        return false;
-                    }
                 }
             }
 
             return true;
         }
-
         public void PrintBoard()
         {
-            for (int r = 0; r < SIZE; r++)
+            for (int r = 0; r < 9; r++)
             {
-                for (int d = 0; d < SIZE; d++)
+                for (int c = 0; c < 9; c++)
                 {
-                    Console.Write(board[r, d]);
-                    Console.Write(" ");
+                    Console.Write(board[r, c] + " ");
                 }
                 Console.WriteLine();
-
-                if ((r + 1) % 3 == 0)
-                {
-                    Console.WriteLine();
-                }
             }
         }
     }
-}
+    }

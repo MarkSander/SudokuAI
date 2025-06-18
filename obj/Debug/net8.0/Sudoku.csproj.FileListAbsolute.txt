@@ -12,3 +12,4 @@ C:\school\jaar 2\periode 3\Sudoku\Sudoku\obj\Debug\net8.0\refint\Sudoku.dll
 C:\school\jaar 2\periode 3\Sudoku\Sudoku\obj\Debug\net8.0\Sudoku.pdb
 C:\school\jaar 2\periode 3\Sudoku\Sudoku\obj\Debug\net8.0\Sudoku.genruntimeconfig.cache
 C:\school\jaar 2\periode 3\Sudoku\Sudoku\obj\Debug\net8.0\ref\Sudoku.dll
+C:\school\jaar 2\periode 3\Sudoku\Sudoku\obj\Debug\net8.0\Sudoku.sourcelink.json
