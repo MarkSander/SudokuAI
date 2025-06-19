@@ -1,4 +1,8 @@
-﻿using System.Diagnostics;
+﻿// Optimized Killer Sudoku Solver with Forward Checking, MRV, and Efficient Constraint Checking
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 
 namespace KillerSudokuSolver
 {
@@ -6,28 +10,9 @@ namespace KillerSudokuSolver
     {
         static void Main(string[] args)
         {
-            
-            int[,] board = new int[9, 9]
-            {
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0}
-            };
-
-            // Killer sudoku hokken
+            int[,] board = new int[9, 9];
             List<Cage> cages = new List<Cage>
             {
-                // killer 1
-                //new Cage(15, new List<(int, int)> { (0, 0), (0, 1), (1, 0), (1, 1) }),
-                //new Cage(10, new List<(int, int)> { (0, 2), (0, 3), (1, 2), (1, 3) }),
-
-                // killer 2
                 new Cage(9,  new List<(int, int)> { (0, 0), (1, 0) }),
                 new Cage(28, new List<(int, int)> { (0, 1), (0, 2), (1, 2), (2, 2), (1,3) }),
                 new Cage(7,  new List<(int, int)> { (1, 1), (2, 1) }),
@@ -53,169 +38,187 @@ namespace KillerSudokuSolver
                 new Cage(9, new List<(int, int)> {(7,5), (7, 6), (8, 6)}),
                 new Cage(24, new List<(int, int)> {(7, 7), (7, 8), (8,7), (8,8)}),
                 new Cage(13, new List<(int, int)> {(8, 2), (8, 3), (8, 4), (8,5)}),
-
-
-                // etc..
             };
 
-            Stopwatch atimer = Stopwatch.StartNew();
-            KillerSudokuSolver solver = new KillerSudokuSolver(board, cages);
+            Stopwatch timer = Stopwatch.StartNew();
+            var solver = new ForwardCheckingSolver(board, cages);
             if (solver.Solve())
             {
-                Console.WriteLine("Solved Killer Sudoku:");
+                Console.WriteLine("Solved:");
                 solver.PrintBoard();
             }
             else
             {
-                Console.WriteLine("No solution exists.");
+                Console.WriteLine("No solution found.");
             }
-            atimer.Stop();
-            Console.WriteLine("Elapsed time: " + atimer.ElapsedMilliseconds + " ms");
+            timer.Stop();
+            Console.WriteLine("Time: " + timer.ElapsedMilliseconds + "ms");
+            Console.ReadLine();
         }
     }
 
     public class Cage
     {
-        public int TargetSum { get; }
-        public List<(int, int)> Cells { get; }
-
-        public Cage(int targetSum, List<(int, int)> cells)
-        {
-            TargetSum = targetSum;
-            Cells = cells;
-        }
+        public int TargetSum;
+        public List<(int, int)> Cells;
+        public Cage(int targetSum, List<(int, int)> cells) { TargetSum = targetSum; Cells = cells; }
     }
 
-    public class KillerSudokuSolver
+    public class ForwardCheckingSolver
     {
-        private int[,] board;
-        private List<Cage> cages;
-        private const int SIZE = 9;
-        private Dictionary<(int, int), List<Cage>> cellCages;
+        private readonly int[,] board;
+        private readonly List<Cage> cages;
+        private readonly Dictionary<(int, int), HashSet<int>> domains;
 
-        // Klassieke sudoku constraints: row, col en grid  
-        private bool[,] rowUsed = new bool[9, 10];
-        private bool[,] colUsed = new bool[9, 10];
-        private bool[,] gridUsed = new bool[9, 10];
-
-        public KillerSudokuSolver(int[,] board, List<Cage> cages)
+        public ForwardCheckingSolver(int[,] board, List<Cage> cages)
         {
             this.board = board;
             this.cages = cages;
-            cellCages = CellsToCages();
+            domains = new();
+            for (int r = 0; r < 9; r++)
+                for (int c = 0; c < 9; c++)
+                    domains[(r, c)] = new HashSet<int>(Enumerable.Range(1, 9));
         }
 
-        // Maak dictionary van welke cage bij elke cel hoort
-        private Dictionary<(int, int), List<Cage>> CellsToCages()
+        public bool Solve() => Backtrack();
+
+        private bool Backtrack()
         {
-            var dict = new Dictionary<(int, int), List<Cage>> ();
+            var unassigned = domains.Where(d => board[d.Key.Item1, d.Key.Item2] == 0)
+                                     .OrderBy(d => d.Value.Count).ToList();
+            if (!unassigned.Any()) return true;
+            var cell = unassigned.First().Key;
+            foreach (int val in unassigned.First().Value.ToList())
+            {
+                if (IsValid(cell.Item1, cell.Item2, val))
+                {
+                    var savedDomains = SaveDomains(cell);
+                    board[cell.Item1, cell.Item2] = val;
+                    domains[cell].Clear();
+                    domains[cell].Add(val);
+                    if (ForwardCheck(cell, val))
+                    {
+                        if (Backtrack()) return true;
+                    }
+                    RestoreDomains(savedDomains);
+                    board[cell.Item1, cell.Item2] = 0;
+                }
+            }
+            return false;
+        }
+
+        private bool IsValid(int row, int col, int val)
+        {
+            for (int i = 0; i < 9; i++)
+                if (board[row, i] == val || board[i, col] == val)
+                    return false;
+
+            int boxRow = row / 3 * 3, boxCol = col / 3 * 3;
+            for (int r = 0; r < 3; r++)
+                for (int c = 0; c < 3; c++)
+                    if (board[boxRow + r, boxCol + c] == val)
+                        return false;
+
+            var cage = cages.FirstOrDefault(c => c.Cells.Contains((row, col)));
+            if (cage != null)
+            {
+                var values = cage.Cells.Select(cell => board[cell.Item1, cell.Item2]).Where(x => x != 0).ToList();
+                if (values.Contains(val)) return false;
+                int sum = values.Sum() + val;
+                int unassigned = cage.Cells.Count(x => board[x.Item1, x.Item2] == 0);
+                if (unassigned == 1 && sum != cage.TargetSum) return false;
+                if (unassigned > 1 && sum >= cage.TargetSum) return false;
+            }
+
+            return true;
+        }
+
+        private bool ForwardCheck((int, int) cell, int val)
+        {
+            int row = cell.Item1, col = cell.Item2;
+            foreach (var (r, c) in RowColBoxPeers(row, col))
+                if (board[r, c] == 0)
+                    domains[(r, c)].Remove(val);
+
             foreach (var cage in cages)
             {
-                foreach (var cell  in cage.Cells)
+                int sum = 0, count = 0;
+                List<(int, int)> unassigned = new();
+                foreach (var (r, c) in cage.Cells)
                 {
-                    if (!dict.ContainsKey (cell))
-                    {
-                        dict[cell] = new List<Cage> ();
-                    }
-                    dict[cell].Add (cage);
+                    int v = board[r, c];
+                    if (v == 0) unassigned.Add((r, c));
+                    else sum += v;
                 }
-            }
-            return dict;
-        }
-        
-        public bool Solve()
-        {
-            for (int row = 0; row < SIZE; row++)
-            {
-                for (int col = 0; col < SIZE; col++)
+                if (!unassigned.Any()) continue;
+                int needed = cage.TargetSum - sum;
+                if (needed <= 0 || needed > 9 * unassigned.Count) return false;
+
+                var combinations = GenerateCombinations(unassigned.Count, needed);
+                var validVals = new HashSet<int>(combinations.SelectMany(x => x));
+                foreach (var u in unassigned)
                 {
-                    if (board[row, col] == 0)
-                    {
-                        for (int num = 1; num <= SIZE; num++)
-                        {
-                            int box = GetGridIndex(row, col);
-                            // Check constraints van rows, cols, grids en cages
-                            if (!rowUsed[row, num] && !colUsed[col, num] && !gridUsed[box, num] && IsCageConstrained(row, col, num))
-                            {
-                                board[row, col] = num;
-                                rowUsed[row, num] = true;
-                                colUsed[col, num] = true;
-                                gridUsed[box, num] = true;
-
-                                if (Solve()) return true; // Recursie 
-
-                                // Backtracking als het faalt
-                                board[row, col] = 0;
-                                rowUsed[row, num] = false;
-                                colUsed[col, num] = false;
-                                gridUsed[box, num] = false;
-                            }
-                        }
-
-                        return false;
-                    }
-                }
-            }
-            return true; // Solved
-        }
-
-        private int GetGridIndex(int row, int col)
-        {
-            return (row / 3) * 3 + (col / 3);
-        }
-
-        // Check of de value in de cage mag volgens de cage constraints
-        private bool IsCageConstrained(int row, int col, int num)
-        {
-            if (cellCages.TryGetValue((row, col), out var cagesForCell))
-            {
-                foreach (var cage in cagesForCell)
-                {
-                    int currentSum = 0;
-                    int emptyCells = 0;
-
-                    foreach (var cell in cage.Cells)
-                    {
-                        int r = cell.Item1;
-                        int c = cell.Item2;
-
-                        // Getallen mogen niet dubbel voorkomen in de cage
-                        if (board[r, c] == num && (r != row || c != col))
-                            return false;
-
-                        // Lege cellen tellen en som optellen
-                        if (board[r, c] == 0)
-                            emptyCells++;
-                        currentSum += board[r, c];
-                    }
-
-                    // De som van getallen mag niet boven het target uitkomen
-                    if (currentSum + num > cage.TargetSum)
-                        return false;
-
-                    // Bij de laatste lege cel moet de som gelijk zijn aan het target
-                    if (emptyCells == 1 && currentSum + num != cage.TargetSum)
-                        return false;
+                    domains[u].RemoveWhere(x => !validVals.Contains(x));
+                    if (domains[u].Count == 0) return false;
                 }
             }
             return true;
         }
 
+        private IEnumerable<List<int>> GenerateCombinations(int count, int sum, int max = 9, int min = 1)
+        {
+            if (count == 1)
+            {
+                if (sum >= min && sum <= max) yield return new List<int> { sum };
+                yield break;
+            }
+            for (int i = min; i <= Math.Min(sum - count + 1, max); i++)
+            {
+                foreach (var combo in GenerateCombinations(count - 1, sum - i, max, i + 1))
+                {
+                    combo.Insert(0, i);
+                    yield return combo;
+                }
+            }
+        }
+
+        private List<((int, int), HashSet<int>)> SaveDomains((int, int) cell)
+        {
+            var copy = new List<((int, int), HashSet<int>)>();
+            foreach (var kv in domains)
+                copy.Add((kv.Key, new HashSet<int>(kv.Value)));
+            return copy;
+        }
+
+        private void RestoreDomains(List<((int, int), HashSet<int>)> saved)
+        {
+            foreach (var (key, value) in saved)
+                domains[key] = value;
+        }
+
+        private IEnumerable<(int, int)> RowColBoxPeers(int row, int col)
+        {
+            for (int i = 0; i < 9; i++)
+            {
+                if (i != col) yield return (row, i);
+                if (i != row) yield return (i, col);
+            }
+            int boxRow = row / 3 * 3, boxCol = col / 3 * 3;
+            for (int r = 0; r < 3; r++)
+                for (int c = 0; c < 3; c++)
+                {
+                    int rr = boxRow + r, cc = boxCol + c;
+                    if ((rr, cc) != (row, col)) yield return (rr, cc);
+                }
+        }
+
         public void PrintBoard()
         {
-            for (int r = 0; r < SIZE; r++)
+            for (int r = 0; r < 9; r++)
             {
-                for (int d = 0; d < SIZE; d++)
-                {
-                    Console.Write(board[r, d]);
-                    Console.Write(" ");
-                }
+                for (int c = 0; c < 9; c++)
+                    Console.Write(board[r, c] + " ");
                 Console.WriteLine();
-
-                if ((r + 1) % 3 == 0)
-                {
-                    Console.WriteLine();
-                }
             }
         }
     }
