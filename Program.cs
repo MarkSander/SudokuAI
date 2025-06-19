@@ -1,4 +1,7 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 
 namespace KillerSudokuSolver
 {
@@ -6,28 +9,10 @@ namespace KillerSudokuSolver
     {
         static void Main(string[] args)
         {
-            
-            int[,] board = new int[9, 9]
-            {
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                {0, 0, 0, 0, 0, 0, 0, 0, 0}
-            };
+            int[,] board = new int[9, 9];
 
-            // Killer sudoku hokken
             List<Cage> cages = new List<Cage>
             {
-                // killer 1
-                //new Cage(15, new List<(int, int)> { (0, 0), (0, 1), (1, 0), (1, 1) }),
-                //new Cage(10, new List<(int, int)> { (0, 2), (0, 3), (1, 2), (1, 3) }),
-
-                // killer 2
                 new Cage(9,  new List<(int, int)> { (0, 0), (1, 0) }),
                 new Cage(28, new List<(int, int)> { (0, 1), (0, 2), (1, 2), (2, 2), (1,3) }),
                 new Cage(7,  new List<(int, int)> { (1, 1), (2, 1) }),
@@ -53,12 +38,9 @@ namespace KillerSudokuSolver
                 new Cage(9, new List<(int, int)> {(7,5), (7, 6), (8, 6)}),
                 new Cage(24, new List<(int, int)> {(7, 7), (7, 8), (8,7), (8,8)}),
                 new Cage(13, new List<(int, int)> {(8, 2), (8, 3), (8, 4), (8,5)}),
-
-
-                // etc..
             };
 
-            Stopwatch atimer = Stopwatch.StartNew();
+            Stopwatch timer = Stopwatch.StartNew();
             KillerSudokuSolver solver = new KillerSudokuSolver(board, cages);
             if (solver.Solve())
             {
@@ -69,8 +51,8 @@ namespace KillerSudokuSolver
             {
                 Console.WriteLine("No solution exists.");
             }
-            atimer.Stop();
-            Console.WriteLine("Elapsed time: " + atimer.ElapsedMilliseconds + " ms");
+            timer.Stop();
+            Console.WriteLine("Elapsed time: " + timer.ElapsedMilliseconds + " ms");
         }
     }
 
@@ -91,9 +73,11 @@ namespace KillerSudokuSolver
         private int[,] board;
         private List<Cage> cages;
         private const int SIZE = 9;
-        private Dictionary<(int, int), List<Cage>> cellCages;
 
-        // Klassieke sudoku constraints: row, col en grid  
+        private Dictionary<(int, int), List<Cage>> cellCages;
+        private Dictionary<(int, int), HashSet<int>> domains;
+        private Dictionary<(int, int), List<(int, int)>> neighbors;
+
         private bool[,] rowUsed = new bool[9, 10];
         private bool[,] colUsed = new bool[9, 10];
         private bool[,] gridUsed = new bool[9, 10];
@@ -103,119 +87,176 @@ namespace KillerSudokuSolver
             this.board = board;
             this.cages = cages;
             cellCages = CellsToCages();
+            domains = Domains();
+            neighbors = InitNeighbors(); // Nieuw: precompute neighbors
         }
 
-        // Maak dictionary van welke cage bij elke cel hoort
         private Dictionary<(int, int), List<Cage>> CellsToCages()
         {
-            var dict = new Dictionary<(int, int), List<Cage>> ();
+            var dict = new Dictionary<(int, int), List<Cage>>();
             foreach (var cage in cages)
-            {
-                foreach (var cell  in cage.Cells)
+                foreach (var cell in cage.Cells)
                 {
-                    if (!dict.ContainsKey (cell))
-                    {
-                        dict[cell] = new List<Cage> ();
-                    }
-                    dict[cell].Add (cage);
+                    if (!dict.ContainsKey(cell))
+                        dict[cell] = new List<Cage>();
+                    dict[cell].Add(cage);
                 }
-            }
             return dict;
         }
-        
-        public bool Solve()
+
+        private Dictionary<(int, int), HashSet<int>> Domains()
         {
+            var dict = new Dictionary<(int, int), HashSet<int>>();
+            for (int row = 0; row < SIZE; row++)
+                for (int col = 0; col < SIZE; col++)
+                    if (board[row, col] == 0)
+                        dict[(row, col)] = new HashSet<int>(Enumerable.Range(1, 9));
+            return dict;
+        }
+
+        private Dictionary<(int, int), List<(int, int)>> InitNeighbors()
+        {
+            var dict = new Dictionary<(int, int), List<(int, int)>>();
+
             for (int row = 0; row < SIZE; row++)
             {
                 for (int col = 0; col < SIZE; col++)
                 {
-                    if (board[row, col] == 0)
+                    var set = new HashSet<(int, int)>();
+
+                    for (int i = 0; i < SIZE; i++)
                     {
-                        for (int num = 1; num <= SIZE; num++)
-                        {
-                            int box = GetGridIndex(row, col);
-                            // Check constraints van rows, cols, grids en cages
-                            if (!rowUsed[row, num] && !colUsed[col, num] && !gridUsed[box, num] && IsCageConstrained(row, col, num))
-                            {
-                                board[row, col] = num;
-                                rowUsed[row, num] = true;
-                                colUsed[col, num] = true;
-                                gridUsed[box, num] = true;
+                        set.Add((row, i));
+                        set.Add((i, col));
+                    }
 
-                                if (Solve()) return true; // Recursie 
+                    int boxRow = (row / 3) * 3;
+                    int boxCol = (col / 3) * 3;
+                    for (int i = 0; i < 3; i++)
+                        for (int j = 0; j < 3; j++)
+                            set.Add((boxRow + i, boxCol + j));
 
-                                // Backtracking als het faalt
-                                board[row, col] = 0;
-                                rowUsed[row, num] = false;
-                                colUsed[col, num] = false;
-                                gridUsed[box, num] = false;
-                            }
-                        }
+                    if (cellCages.TryGetValue((row, col), out var cageList))
+                        foreach (var cage in cageList)
+                            foreach (var cell in cage.Cells)
+                                set.Add(cell);
 
-                        return false;
+                    set.Remove((row, col));
+                    dict[(row, col)] = set.ToList();
+                }
+            }
+
+            return dict;
+        }
+
+        public bool Solve()
+        {
+            (int row, int col)? next = null;
+            int minDomainSize = 10;
+
+            foreach (var cell in domains.Keys)
+            {
+                if (board[cell.Item1, cell.Item2] == 0)
+                {
+                    int domainSize = domains[cell].Count;
+                    if (domainSize < minDomainSize)
+                    {
+                        next = cell;
+                        minDomainSize = domainSize;
+                        if (domainSize == 1) break; // early exit
                     }
                 }
             }
-            return true; // Solved
+
+            if (next == null) return true;
+
+            int r = next.Value.Item1;
+            int c = next.Value.Item2;
+
+            foreach (int num in domains[(r, c)])
+            {
+                int grid = GetGridIndex(r, c);
+                if (!rowUsed[r, num] && !colUsed[c, num] && !gridUsed[grid, num] && IsCageConstrained(r, c, num))
+                {
+                    board[r, c] = num;
+                    rowUsed[r, num] = true;
+                    colUsed[c, num] = true;
+                    gridUsed[grid, num] = true;
+
+                    var removed = ForwardCheck(r, c, num);
+                    if (removed != null)
+                    {
+                        if (Solve()) return true;
+                        UndoForwardCheck(removed);
+                    }
+
+                    board[r, c] = 0;
+                    rowUsed[r, num] = false;
+                    colUsed[c, num] = false;
+                    gridUsed[grid, num] = false;
+                }
+            }
+
+            return false;
         }
 
-        private int GetGridIndex(int row, int col)
-        {
-            return (row / 3) * 3 + (col / 3);
-        }
 
-        // Check of de value in de cage mag volgens de cage constraints
+        private int GetGridIndex(int row, int col) => (row / 3) * 3 + (col / 3);
+
         private bool IsCageConstrained(int row, int col, int num)
         {
-            if (cellCages.TryGetValue((row, col), out var cagesForCell))
+            if (!cellCages.TryGetValue((row, col), out var cagesForCell)) return true;
+
+            foreach (var cage in cagesForCell)
             {
-                foreach (var cage in cagesForCell)
+                int currentSum = 0, empty = 0;
+
+                foreach (var (r, c) in cage.Cells)
                 {
-                    int currentSum = 0;
-                    int emptyCells = 0;
-
-                    foreach (var cell in cage.Cells)
-                    {
-                        int r = cell.Item1;
-                        int c = cell.Item2;
-
-                        // Getallen mogen niet dubbel voorkomen in de cage
-                        if (board[r, c] == num && (r != row || c != col))
-                            return false;
-
-                        // Lege cellen tellen en som optellen
-                        if (board[r, c] == 0)
-                            emptyCells++;
-                        currentSum += board[r, c];
-                    }
-
-                    // De som van getallen mag niet boven het target uitkomen
-                    if (currentSum + num > cage.TargetSum)
-                        return false;
-
-                    // Bij de laatste lege cel moet de som gelijk zijn aan het target
-                    if (emptyCells == 1 && currentSum + num != cage.TargetSum)
-                        return false;
+                    if (board[r, c] == num && (r != row || c != col)) return false;
+                    if (board[r, c] == 0) empty++;
+                    currentSum += board[r, c];
                 }
+
+                if (currentSum + num > cage.TargetSum) return false;
+                if (empty == 1 && currentSum + num != cage.TargetSum) return false;
             }
             return true;
+        }
+
+        private List<((int, int), int)> ForwardCheck(int r, int c, int num)
+        {
+            var removed = new List<((int, int), int)>();
+            foreach (var neighbor in neighbors[(r, c)])
+            {
+                if (board[neighbor.Item1, neighbor.Item2] == 0 && domains[neighbor].Contains(num))
+                {
+                    domains[neighbor].Remove(num);
+                    removed.Add((neighbor, num));
+                    if (domains[neighbor].Count == 0)
+                    {
+                        UndoForwardCheck(removed);
+                        return null;
+                    }
+                }
+            }
+            return removed;
+        }
+
+        private void UndoForwardCheck(List<((int, int), int)> removed)
+        {
+            foreach (var (cell, value) in removed)
+                domains[cell].Add(value);
         }
 
         public void PrintBoard()
         {
             for (int r = 0; r < SIZE; r++)
             {
-                for (int d = 0; d < SIZE; d++)
-                {
-                    Console.Write(board[r, d]);
-                    Console.Write(" ");
-                }
+                for (int c = 0; c < SIZE; c++)
+                    Console.Write(board[r, c] + " ");
                 Console.WriteLine();
-
-                if ((r + 1) % 3 == 0)
-                {
-                    Console.WriteLine();
-                }
+                if ((r + 1) % 3 == 0) Console.WriteLine();
             }
         }
     }
