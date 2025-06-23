@@ -1,0 +1,37 @@
+## Ignore build results
+bin/
+obj/
+*.exe
+*.dll
+
+## User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Rider / VS Code / VS specific
+.vscode/
+.idea/
+*.csproj.user
+
+## Backup files
+*.bak
+*.swp
+*.tmp
+*.log
+
+## OS-generated
+.DS_Store
+Thumbs.db
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+## Test results
+TestResults/
+*.coverage
+*.coveragexml
+*.trx
