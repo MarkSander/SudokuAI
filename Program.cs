@@ -359,7 +359,6 @@ class Program
                 Console.WriteLine($"  Fastest time: {minTime:F3} ms");
                 Console.WriteLine($"  Slowest time: {maxTime:F3} ms");
                 
-                // Print the solution from the last solver
                 var finalSolver = new KillerSudokuSolver(cages);
                 finalSolver.Solve();
                 finalSolver.Print();
@@ -574,13 +573,11 @@ public class KillerSudokuSolver
 
         if (CombinationCache.TryGetValue(key, out var cached))
         {
-            // Filter cached combinations on-the-fly based on exclusions
             return cached
                 .Where(combo => !combo.Any(val => exclude.Contains(val)))
                 .ToList();
         }
 
-        // Generate all combinations for this count and sum (without exclusions)
         var combos = Enumerable.Range(1, 9)
             .ToList()
             .Combinations(count)
@@ -589,7 +586,6 @@ public class KillerSudokuSolver
 
         CombinationCache[key] = combos;
 
-        // Return filtered combinations
         return combos
             .Where(combo => !combo.Any(val => exclude.Contains(val)))
             .ToList();
