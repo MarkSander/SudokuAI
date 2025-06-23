@@ -321,21 +321,22 @@ class Program
             ("cagesHard2", cagesHard2),
             ("cagesTwoStarP2", cagesTwoStarP2),
             ("cagesTwoStar", cagesTwoStar),
-        };        foreach (var (name, cages) in puzzles)
+        };
+        foreach (var (name, cages) in puzzles)
         {
             const int iterations = 10;
             var times = new List<double>();
             bool allSolved = true;
-            
+
             Console.WriteLine($"Puzzle: {name}");
-            
+
             for (int i = 0; i < iterations; i++)
             {
                 var solver = new KillerSudokuSolver(cages);
                 var stopwatch = Stopwatch.StartNew();
                 bool solved = solver.Solve();
                 stopwatch.Stop();
-                
+
                 if (solved)
                 {
                     times.Add(stopwatch.Elapsed.TotalMilliseconds);
@@ -347,18 +348,18 @@ class Program
                     break;
                 }
             }
-            
+
             if (allSolved && times.Count > 0)
             {
                 var avgTime = times.Average();
                 var minTime = times.Min();
                 var maxTime = times.Max();
-                
+
                 Console.WriteLine($"  Solved successfully in all {iterations} runs");
                 Console.WriteLine($"  Average time: {avgTime:F3} ms");
                 Console.WriteLine($"  Fastest time: {minTime:F3} ms");
                 Console.WriteLine($"  Slowest time: {maxTime:F3} ms");
-                
+
                 var finalSolver = new KillerSudokuSolver(cages);
                 finalSolver.Solve();
                 finalSolver.Print();
@@ -367,7 +368,7 @@ class Program
             {
                 Console.WriteLine($"  Failed to solve in at least one run");
             }
-            
+
             Console.WriteLine();
         }
     }
@@ -377,28 +378,34 @@ public class KillerSudokuSolver
 {
     const int Size = 9;
     int[,] Grid = new int[Size, Size];
-    Dictionary<(int, int), int> Domains = new();
+    int[] Domains = new int[81];
     List<Cage> Cages;
-    Dictionary<(int, int), List<(int, int)>> PeerCache = new();
-    Dictionary<(int, int), List<Cage>> CellToCagesCache = new();
-    Dictionary<(int count, int sum), List<List<int>>> CombinationCache = new();
+    List<(int, int)>[] PeerCache = new List<(int, int)>[81];
+    List<Cage>[] CellToCages = new List<Cage>[81];
+    
+    Dictionary<(int count, int sum, string excluded), List<List<int>>> CombinationCache = new();
+
+
     public record Cage(int Sum, List<(int Row, int Col)> Cells);
-    int backtrackCalls = 0;
+    
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    static int GetIndex(int row, int col) => row * 9 + col;
 
     public KillerSudokuSolver(List<Cage> cages)
     {
         Cages = cages;
         InitializeDomains();
         InitializePeers();
-        InitializeCellToCagesCache();
+        InitializeCageLookup(); 
     }
+
 
     void InitializeDomains()
     {
-        for (int r = 0; r < Size; r++)
-            for (int c = 0; c < Size; c++)
-                Domains[(r, c)] = BitmaskHelper.FullMask;
+        for (int r = 0; r < 81; r++)
+                Domains[r] = BitmaskHelper.FullMask;
     }
+
 
     void InitializePeers()
     {
@@ -411,35 +418,16 @@ public class KillerSudokuSolver
                 for (int i = 0; i < Size; i++)
                 {
                     if (i != col) peers.Add((row, i));
-                    if (i != row) peers.Add((i, col)); 
+                    if (i != row) peers.Add((i, col));
                 }
 
                 int startRow = (row / 3) * 3, startCol = (col / 3) * 3;
                 for (int r = startRow; r < startRow + 3; r++)
-                    for (int c = startCol; c < startCol + 3; c++)
-                        if (r != row || c != col)
-                            peers.Add((r, c));
+                for (int c = startCol; c < startCol + 3; c++)
+                    if (r != row || c != col)
+                        peers.Add((r, c));
 
-                PeerCache[(row, col)] = peers.ToList();
-            }
-        }
-    }
-
-    void InitializeCellToCagesCache()
-    {
-        for (int row = 0; row < Size; row++)
-        {
-            for (int col = 0; col < Size; col++)
-            {
-                CellToCagesCache[(row, col)] = new List<Cage>();
-            }
-        }
-
-        foreach (var cage in Cages)
-        {
-            foreach (var (row, col) in cage.Cells)
-            {
-                CellToCagesCache[(row, col)].Add(cage);
+                PeerCache[GetIndex(row, col)] = peers.ToList();
             }
         }
     }
@@ -448,26 +436,45 @@ public class KillerSudokuSolver
     {
         return Backtrack();
     }
-
+    int backtrackCalls = 0;
+    int maxDepth = 0;
     bool Backtrack(int depth = 0)
     {
         backtrackCalls++;
-        var unassigned = Domains
-            .Where(kv => Grid[kv.Key.Item1, kv.Key.Item2] == 0)
-            .OrderBy(kv => BitmaskHelper.Count(kv.Value))
-            .ToList();
+        maxDepth = Math.Max(maxDepth, depth);
+        
+        int bestCell = -1;
+        int bestRow = -1, bestCol = -1;
+        int minDomainCount = 10;
+        
+        for (int r = 0; r < Size; r++)
+        {
+            for (int c = 0; c < Size; c++)
+            {
+                if (Grid[r, c] == 0)
+                {
+                    int domainCount = BitmaskHelper.Count(Domains[GetIndex(r, c)]);
+                    if (domainCount < minDomainCount)
+                    {
+                        minDomainCount = domainCount;
+                        bestCell = GetIndex(r, c);
+                        bestRow = r;
+                        bestCol = c;
+                    }
+                }
+            }
+        }
 
-        if (!unassigned.Any())
+        if (bestCell == -1)
             return true;
 
-        var cell = unassigned.First().Key;
-        var domainMask = Domains[cell];
+        var domainMask = Domains[bestCell];
 
         List<int> domainSorted;
         if (BitmaskHelper.Count(domainMask) > 6)
         {
             domainSorted = BitmaskHelper.Values(domainMask)
-                .Select(value => (value, constraints: PeerCache[cell].Count(p => BitmaskHelper.Contains(Domains[p], value))))
+                .Select(value => (value, constraints: PeerCache[bestCell].Count(p => BitmaskHelper.Contains(Domains[GetIndex(p.Item1, p.Item2)], value))))
                 .OrderByDescending(x => x.constraints)
                 .Select(x => x.value)
                 .ToList();
@@ -479,32 +486,29 @@ public class KillerSudokuSolver
 
         foreach (var value in domainSorted)
         {
-            if (IsValid(cell.Item1, cell.Item2, value))
+            Grid[bestRow, bestCol] = value;
+
+            var domainChanges = new Stack<(int, int)>(); 
+            if (ForwardCheck(bestRow, bestCol, value, domainChanges))
             {
-                Grid[cell.Item1, cell.Item2] = value;
-
-                var domainChanges = new Stack<((int, int), int)>();
-
-                if (ForwardCheck(cell.Item1, cell.Item2, value, domainChanges))
-                {
-                    if (Backtrack(depth +1))
-                        return true;
-                }
-
-                while (domainChanges.Count > 0)
-                {
-                    var (pos, oldMask) = domainChanges.Pop();
-                    Domains[pos] = oldMask;
-                }
-
-                Grid[cell.Item1, cell.Item2] = 0;
+                if (Backtrack(depth + 1))
+                    return true;
             }
+
+            while (domainChanges.Count > 0)
+            {
+                var (idx, oldMask) = domainChanges.Pop();
+                Domains[idx] = oldMask;
+            }
+
+            Grid[bestRow, bestCol] = 0;
         }
         return false;
     }
     bool IsValid(int row, int col, int value)
     {
-        foreach (var (r, c) in PeerCache[(row, col)])
+        int cellIndex = GetIndex(row, col);
+        foreach (var (r, c) in PeerCache[cellIndex])
         {
             if (Grid[r, c] == value)
                 return false;
@@ -512,19 +516,39 @@ public class KillerSudokuSolver
         return true;
     }
 
-    bool ForwardCheck(int row, int col, int value, Stack<((int, int), int)> domainChanges)
+    void InitializeCageLookup()
     {
-        foreach (var pos in PeerCache[(row, col)])
+        for (int i = 0; i < 81; i++)
+            CellToCages[i] = new List<Cage>();
+            
+        foreach (var cage in Cages)
         {
-            if (Grid[pos.Item1, pos.Item2] == 0 && BitmaskHelper.Contains(Domains[pos], value))
+            foreach (var cell in cage.Cells)
             {
-                domainChanges.Push((pos, Domains[pos]));
-                Domains[pos] = BitmaskHelper.Remove(Domains[pos], value);
-                if (Domains[pos] == 0) return false;
+                CellToCages[GetIndex(cell.Row, cell.Col)].Add(cage);
+            }
+        }
+    }
+    bool ForwardCheck(int row, int col, int value, Stack<(int, int)> domainChanges)
+    {
+        int cellIndex = GetIndex(row, col);
+        
+        foreach (var pos in PeerCache[cellIndex])
+        {
+            if (Grid[pos.Item1, pos.Item2] == 0)
+            {
+                int peerIndex = GetIndex(pos.Item1, pos.Item2);
+                if (BitmaskHelper.Contains(Domains[peerIndex], value))
+                {
+                    domainChanges.Push((peerIndex, Domains[peerIndex]));
+                    Domains[peerIndex] = BitmaskHelper.Remove(Domains[peerIndex], value);
+                    if (Domains[peerIndex] == 0) return false;
+                }
             }
         }
 
-        foreach (var cage in CellToCagesCache[(row, col)])
+        var cages = CellToCages[cellIndex];
+        foreach (var cage in cages)
         {
             var assigned = cage.Cells
                 .Where(p => Grid[p.Row, p.Col] != 0)
@@ -545,7 +569,8 @@ public class KillerSudokuSolver
 
             foreach (var cell in unassigned)
             {
-                var oldMask = Domains[cell];
+                int unassignedIndex = GetIndex(cell.Row, cell.Col);
+                var oldMask = Domains[unassignedIndex];
                 var newMask = 0;
                 foreach (var val in BitmaskHelper.Values(oldMask))
                 {
@@ -555,11 +580,11 @@ public class KillerSudokuSolver
 
                 if (newMask != oldMask)
                 {
-                    domainChanges.Push((cell, oldMask));
-                    Domains[cell] = newMask;
+                    domainChanges.Push((unassignedIndex, oldMask));
+                    Domains[unassignedIndex] = newMask;
                 }
 
-                if (Domains[cell] == 0)
+                if (Domains[unassignedIndex] == 0)
                     return false;
             }
         }
@@ -569,26 +594,21 @@ public class KillerSudokuSolver
 
     List<List<int>> GetValidCombinations(int count, int sum, List<int> exclude)
     {
-        var key = (count, sum);
+        string keyExclude = string.Join(",", exclude.OrderBy(x => x));
+        var key = (count, sum, keyExclude);
 
         if (CombinationCache.TryGetValue(key, out var cached))
-        {
-            return cached
-                .Where(combo => !combo.Any(val => exclude.Contains(val)))
-                .ToList();
-        }
+            return cached;
 
         var combos = Enumerable.Range(1, 9)
+            .Where(i => !exclude.Contains(i))
             .ToList()
             .Combinations(count)
             .Where(c => c.Sum() == sum)
             .ToList();
 
         CombinationCache[key] = combos;
-
-        return combos
-            .Where(combo => !combo.Any(val => exclude.Contains(val)))
-            .ToList();
+        return combos;
     }
 
     public void Print()
@@ -599,7 +619,8 @@ public class KillerSudokuSolver
                 Console.Write($"{Grid[r, c]} ");
             Console.WriteLine();
         }
-        Console.WriteLine($"Backtrack calls: {backtrackCalls}");
+        Console.WriteLine($"Backtrack calls: {backtrackCalls}, Max depth: {maxDepth}");
+
     }
 }
 
@@ -623,7 +644,6 @@ public static class Extensions
         }
     }
 }
-
 public static class BitmaskHelper
 {
     public const int FullMask = 0b111111111; 
@@ -658,6 +678,6 @@ public static class BitmaskHelper
     {
         for (int i = 0; i < 9; i++)
             if ((mask & (1 << i)) != 0)
-                yield return i + 1;
-    }
+                yield return i + 1;
+    }
 }
