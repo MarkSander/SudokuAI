@@ -21,7 +21,7 @@ namespace KillerSudokuSolver
                 {0, 0, 0, 0, 0, 0, 0, 0, 0},
                 {0, 0, 0, 0, 0, 0, 0, 0, 0},
                 {0, 0, 0, 0, 0, 0, 0, 0, 0}
-            };            var cagesEasy = new List<Cage>
+            }; var cagesEasy = new List<Cage>
             {
                 new(7,  new() { (4, 2), (4, 3) }),
                 new(7,  new() { (2, 1), (2, 2) }),
@@ -326,30 +326,6 @@ namespace KillerSudokuSolver
                 new(20, new() {(8,3), (8,4), (8,5), (7,4)}),
                 new(23, new() {(7,7), (8,6), (8,7)})
             };
-            var cagesNightmare = new List<Cage>
-            {
-                new(4,  new() { (1, 0), (1, 1) }),
-                new(7, new() { (1, 2), (2, 2)}),
-                new(5, new(){(0,5), (0,6)}),
-                new(8, new() {(0,7), (1,7)}),
-                new(14, new() {(1,5), (2,5)}),
-                new(13, new() {(2,0), (3,0)}),
-                new(11, new() {(2, 6), (2,7)}),
-                new(10, new() {(3,1), (3,2)}),
-                new(6, new() {(3,3), (3,4)}),
-                new(9, new() {(3,5), (4,5)}),
-                new(13, new() {(4,3), (5,3)}),
-                new(12, new() {(5,4), (5,5)}),
-                new(6, new() {(5,6), (5,7)}),
-                new(9, new() {(5,8), (6,8)}),
-                new(7, new() {(6,1), (6,2)}),
-                new(10, new() {(6,3), (7,3)}),
-                new(15, new() {(6,6), (7,6)}),
-                new(16, new() {(7,1), (8,1)}),
-                new(12, new() {(7,7), (7,8)}),
-                new(13, new() {(8,2), (8,3)})
-            };
-
             var puzzles = new List<(string Name, List<Cage> Cages)>
             {
                 ("cagesEasy", cagesEasy),
@@ -361,47 +337,60 @@ namespace KillerSudokuSolver
                 ("cagesHard2", cagesHard2),
                 ("cagesTwoStarP2", cagesTwoStarP2),
                 ("cagesTwoStar", cagesTwoStar),
-            };            foreach (var (name, cages) in puzzles)
+            };
+
+            // Solve all sudokus 
+
+            // foreach (var (name, cages) in puzzles)
+            // {
+            //     Console.WriteLine($"Puzzle: {name}");
+            //     var times = new List<double>();
+            //     KillerSudokuSolver lastSolver = null;
+            //     bool anySolved = false;                // Solve the puzzle 10 times
+            //     for (int attempt = 1; attempt <= 10; attempt++)
+            //     {
+            //         var solver = new KillerSudokuSolver(cages);
+            //         var stopwatch = Stopwatch.StartNew();
+            //         bool solved = solver.Solve();
+            //         stopwatch.Stop();
+            //         if (solved)
+            //         {
+            //             anySolved = true;
+            //             lastSolver = solver;
+            //             times.Add(stopwatch.Elapsed.TotalMilliseconds);
+            //         }
+            //     }
+            //     if (anySolved)
+            //     {
+            //         Console.WriteLine("\nSolution:");
+            //         lastSolver.PrintBoard();
+            //         double averageTime = times.Average();
+            //         double fastestTime = times.Min();
+            //         Console.WriteLine($"\nStatistics:");
+            //         Console.WriteLine($"  Successful solves: {times.Count}/10");
+            //         Console.WriteLine($"  Average time: {averageTime:F3} ms");
+            //         Console.WriteLine($"  Fastest time: {fastestTime:F3} ms");
+            //     }
+            //     else
+            //     {
+            //         Console.WriteLine("No solution found in any attempt.");
+            //     }
+            //     Console.WriteLine(new string('-', 50));
+            // }
+
+            // Solve specific sudoku 
+            var solver = new KillerSudokuSolver(cagesHard);
+            var stopwatch = Stopwatch.StartNew();
+            bool solved = solver.Solve();
+            stopwatch.Stop();
+            if (solved)
             {
-                Console.WriteLine($"Puzzle: {name}");
-                
-                var times = new List<double>();
-                KillerSudokuSolver lastSolver = null;
-                bool anySolved = false;                // Solve the puzzle 10 times
-                for (int attempt = 1; attempt <= 10; attempt++)
-                {
-                    var solver = new KillerSudokuSolver(cages);
-                    var stopwatch = Stopwatch.StartNew();
-                    bool solved = solver.Solve();
-                    stopwatch.Stop();
-
-                    if (solved)
-                    {
-                        anySolved = true;
-                        lastSolver = solver;
-                        times.Add(stopwatch.Elapsed.TotalMilliseconds);
-                    }
-                }
-
-                // Print results
-                if (anySolved)
-                {
-                    Console.WriteLine("\nSolution:");
-                    lastSolver.PrintBoard();
-                    
-                    double averageTime = times.Average();
-                    double fastestTime = times.Min();
-                    
-                    Console.WriteLine($"\nStatistics:");
-                    Console.WriteLine($"  Successful solves: {times.Count}/10");
-                    Console.WriteLine($"  Average time: {averageTime:F3} ms");
-                    Console.WriteLine($"  Fastest time: {fastestTime:F3} ms");
-                }
-                else
-                {
-                    Console.WriteLine("No solution found in any attempt.");
-                }
-                Console.WriteLine(new string('-', 50));
+                solver.PrintBoard();
+                Console.WriteLine($"Time taken: {stopwatch.Elapsed.TotalMilliseconds:F3} ms");
+            }
+            else
+            {
+                Console.WriteLine("No solution found for the specific sudoku.");
             }
         }
     }
