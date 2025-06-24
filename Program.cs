@@ -322,54 +322,68 @@ class Program
             ("cagesTwoStarP2", cagesTwoStarP2),
             ("cagesTwoStar", cagesTwoStar),
         };
-        foreach (var (name, cages) in puzzles)
+
+        // Solve all sudokus
+
+        // foreach (var (name, cages) in puzzles)
+        // {
+        //     const int iterations = 10;
+        //     var times = new List<double>();
+        //     bool allSolved = true;
+        //     Console.WriteLine($"Puzzle: {name}");
+        //     for (int i = 0; i < iterations; i++)
+        //     {
+        //         var solver = new KillerSudokuSolver(cages);
+        //         var stopwatch = Stopwatch.StartNew();
+        //         bool solved = solver.Solve();
+        //         stopwatch.Stop();
+        //         if (solved)
+        //         {
+        //             times.Add(stopwatch.Elapsed.TotalMilliseconds);
+        //         }
+        //         else
+        //         {
+        //             allSolved = false;
+        //             Console.WriteLine($"  Run {i + 1}: No solution found");
+        //             break;
+        //         }
+        //     }
+        //     if (allSolved && times.Count > 0)
+        //     {
+        //         var avgTime = times.Average();
+        //         var minTime = times.Min();
+        //         var maxTime = times.Max();
+        //         Console.WriteLine($"  Solved successfully in all {iterations} runs");
+        //         Console.WriteLine($"  Average time: {avgTime:F3} ms");
+        //         Console.WriteLine($"  Fastest time: {minTime:F3} ms");
+        //         Console.WriteLine($"  Slowest time: {maxTime:F3} ms");
+        //         var finalSolver = new KillerSudokuSolver(cages);
+        //         finalSolver.Solve();
+        //         finalSolver.Print();
+        //     }
+        //     else if (!allSolved)
+        //     {
+        //         Console.WriteLine($"  Failed to solve in at least one run");
+        //     }
+        //     Console.WriteLine();
+        // }
+
+        // Solve specific sudoku
+
+        var solver = new KillerSudokuSolver(cagesHard);
+        var stopwatch = Stopwatch.StartNew();
+        bool solved = solver.Solve();
+        stopwatch.Stop();
+        if (solved)
         {
-            const int iterations = 10;
-            var times = new List<double>();
-            bool allSolved = true;
-
-            Console.WriteLine($"Puzzle: {name}");
-
-            for (int i = 0; i < iterations; i++)
-            {
-                var solver = new KillerSudokuSolver(cages);
-                var stopwatch = Stopwatch.StartNew();
-                bool solved = solver.Solve();
-                stopwatch.Stop();
-
-                if (solved)
-                {
-                    times.Add(stopwatch.Elapsed.TotalMilliseconds);
-                }
-                else
-                {
-                    allSolved = false;
-                    Console.WriteLine($"  Run {i + 1}: No solution found");
-                    break;
-                }
-            }
-
-            if (allSolved && times.Count > 0)
-            {
-                var avgTime = times.Average();
-                var minTime = times.Min();
-                var maxTime = times.Max();
-
-                Console.WriteLine($"  Solved successfully in all {iterations} runs");
-                Console.WriteLine($"  Average time: {avgTime:F3} ms");
-                Console.WriteLine($"  Fastest time: {minTime:F3} ms");
-                Console.WriteLine($"  Slowest time: {maxTime:F3} ms");
-
-                var finalSolver = new KillerSudokuSolver(cages);
-                finalSolver.Solve();
-                finalSolver.Print();
-            }
-            else if (!allSolved)
-            {
-                Console.WriteLine($"  Failed to solve in at least one run");
-            }
-
-            Console.WriteLine();
+            solver.Print();
+            Console.WriteLine($"Solved in {stopwatch.Elapsed.TotalMilliseconds:F3} ms");
+            Console.ReadLine();
+        }
+        else
+        {
+            Console.WriteLine("No solution found.");
+            Console.ReadLine();
         }
     }
 }
@@ -437,11 +451,9 @@ public class KillerSudokuSolver
         return Backtrack();
     }
     int backtrackCalls = 0;
-    int maxDepth = 0;
     bool Backtrack(int depth = 0)
     {
         backtrackCalls++;
-        maxDepth = Math.Max(maxDepth, depth);
         
         int bestCell = -1;
         int bestRow = -1, bestCol = -1;
@@ -619,7 +631,7 @@ public class KillerSudokuSolver
                 Console.Write($"{Grid[r, c]} ");
             Console.WriteLine();
         }
-        Console.WriteLine($"Backtrack calls: {backtrackCalls}, Max depth: {maxDepth}");
+        Console.WriteLine($"Backtrack calls: {backtrackCalls}");
 
     }
 }
